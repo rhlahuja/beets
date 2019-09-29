@@ -28,6 +28,8 @@ import six
 import unidecode
 import requests
 import confuse
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 from beets import ui
 from beets.autotag.hooks import AlbumInfo, TrackInfo
@@ -75,6 +77,12 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
             confuse.Filename(in_app_dir=True)
         )  # Path to the JSON file for storing the OAuth access token.
         self.setup()
+
+        self.session = requests.Session()
+        retries = Retry(
+            total=5, backoff_factor=1, status_forcelist=[500, 502, 503, 504]
+        )
+        self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
     def setup(self):
         """Retrieve previously saved OAuth token or generate a new one."""
@@ -136,6 +144,7 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
         :return: JSON data for the class:`Response <Response>` object.
         :rtype: dict
         """
+
         response = request_type(
             url,
             headers={'Authorization': 'Bearer {}'.format(self.access_token)},
@@ -171,7 +180,7 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
             return None
 
         album_data = self._handle_response(
-            requests.get, self.album_url + spotify_id
+            self.session.get, self.album_url + spotify_id
         )
         artist, artist_id = self.get_artist(album_data['artists'])
 
@@ -266,7 +275,7 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
             if spotify_id is None:
                 return None
             track_data = self._handle_response(
-                requests.get, self.track_url + spotify_id
+                self.session.get, self.track_url + spotify_id
             )
         track = self._get_track(track_data)
 
@@ -274,7 +283,7 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
         # release) and `track.medium_total` (total number of tracks on
         # the track's disc).
         album_data = self._handle_response(
-            requests.get, self.album_url + track_data['album']['id']
+            self.session.get, self.album_url + track_data['album']['id']
         )
         medium_total = 0
         for i, track_data in enumerate(album_data['tracks']['items'], start=1):
@@ -332,7 +341,7 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
         )
         response_data = (
             self._handle_response(
-                requests.get,
+                self.session.get,
                 self.search_url,
                 params={'q': query, 'type': query_type},
             )
