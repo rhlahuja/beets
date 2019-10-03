@@ -144,7 +144,6 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
         :return: JSON data for the class:`Response <Response>` object.
         :rtype: dict
         """
-
         response = request_type(
             url,
             headers={'Authorization': 'Bearer {}'.format(self.access_token)},
